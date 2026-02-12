@@ -28,3 +28,13 @@ The application automatically installs itself to the following locations:
 - **Resilience**: Uses a dual-process watchdog mechanism. The watchdog process is randomized (12 digits) to avoid being easily searched or grouped. If the main logger or the watchdog is killed, the other will automatically restart it within seconds.
 - **Installation**: Automatically installs to `%LOCALAPPDATA%\WindowsSystemUtility\`.
 - **Persistence**: Re-registers itself in the Registry for startup on every execution.
+
+## Uninstallation
+
+To completely remove the keylogger, run the provided uninstaller script as an Administrator:
+
+```powershell
+.\KeyLoggerUninstaller.ps1
+```
+
+This script will terminate all active processes (including the watchdog), remove the startup registry entry, and delete the installation files.
