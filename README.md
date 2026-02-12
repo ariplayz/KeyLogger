@@ -28,7 +28,3 @@ The application automatically installs itself to the following locations:
 - **Resilience**: Uses a dual-process watchdog mechanism. The watchdog process is randomized (12 digits) to avoid being easily searched or grouped. If the main logger or the watchdog is killed, the other will automatically restart it within seconds.
 - **Installation**: Automatically installs to `%LOCALAPPDATA%\WindowsSystemUtility\`.
 - **Persistence**: Re-registers itself in the Registry for startup on every execution.
-
-## Configuration
-
-- `DISABLE_KEYLOGGER`: Set this environment variable to `true` to disable the keylogger. When this variable is set to `true`, the application will stop logging, kill all running instances, and remove its startup registry entry. It will remain on the disk but stay dormant as long as the variable is `true`.

