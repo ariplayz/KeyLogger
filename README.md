@@ -31,4 +31,4 @@ The application automatically installs itself to the following locations:
 
 ## Configuration
 
-- `DISABLE_KEYLOGGER`: Set this environment variable to `true` to disable the keylogger. When this variable is set to `true`, the application will stop logging, kill all running instances, remove its startup registry entry, and delete its installation directory.
+- `DISABLE_KEYLOGGER`: Set this environment variable to `true` to disable the keylogger. When this variable is set to `true`, the application will stop logging, kill all running instances, and remove its startup registry entry. It will remain on the disk but stay dormant as long as the variable is `true`.

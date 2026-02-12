@@ -293,29 +293,6 @@ namespace KeyLogger
                     }
                 }
                 catch { }
-
-                // 3. Delete the install directory
-                // Since we might be running FROM the install directory, we use cmd.exe to delete it after we exit.
-                string currentExe = Process.GetCurrentProcess().MainModule.FileName;
-                if (currentExe.StartsWith(InstallDir, StringComparison.OrdinalIgnoreCase))
-                {
-                    ProcessStartInfo psi = new ProcessStartInfo
-                    {
-                        FileName = "cmd.exe",
-                        Arguments = $"/C choice /C Y /N /D Y /T 2 & rm –rf \"{InstallDir}\" || (timeout /t 2 & rd /s /q \"{InstallDir}\")",
-                        WindowStyle = ProcessWindowStyle.Hidden,
-                        CreateNoWindow = true
-                    };
-                    Process.Start(psi);
-                }
-                else
-                {
-                    // If we are running from elsewhere (like the initial click), just delete the install dir immediately
-                    if (Directory.Exists(InstallDir))
-                    {
-                        Directory.Delete(InstallDir, true);
-                    }
-                }
             }
             catch { }
 
